@@ -134,7 +134,7 @@ class NodeVocab(object):
         self.nodes.sort(key=lambda x: x.count, reverse=True)
         node2index = {}
         for i, node in enumerate(self.nodes):
-            node2index[node.node_id] = i    #actually, is not change ?
+            node2index[node.node_id] = i    #resort by new nodes order
         self.node2index = node2index
 
     def count(self):
