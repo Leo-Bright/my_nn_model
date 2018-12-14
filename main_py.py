@@ -66,46 +66,9 @@ def main(graph_fname, node_vec_fname, options):
 
     model.train(G, tmp_walk_fname, k_hop_neighbors=neighbors)
 
-    model.dump_to_file(tmp_node_vec_fname, type_='node')
-
     print 'Dump vectors...'
-    output_node2vec(G, tmp_node_vec_fname, node_vec_fname)
+    model.dump_to_file(node_vec_fname, type_='node')
     return 0
-
-
-def output_node2vec(g, tmp_node_vec_fname, node_vec_fname):
-    with open(tmp_node_vec_fname) as f:
-        with open(node_vec_fname, 'w') as fo:
-            id2node = dict([(v, k) for k, v in g.node2id.items()])
-            first = True
-            for line in f:
-                if first:
-                    first = False
-                    fo.write(line)
-                    continue
-
-                id_, vectors = line.strip().split(' ', 1)
-                line = '%s %s\n' % (id2node[int(id_)], vectors)
-                fo.write(line)
-
-
-# FIXME: to support more than 10 different meta-paths
-def output_path2vec(g, tmp_path_vec_fname, path_vec_fname):
-    with open(tmp_path_vec_fname) as f:
-        with open(path_vec_fname, 'w') as fo:
-            id2edge_class = dict([(v, k) for k, v
-                                  in g.edge_class2id.items()])
-            first = True
-            for line in f:
-                if first:
-                    first = False
-                    fo.write(line)
-                    continue
-
-                ids, vectors = line.strip().split(' ', 1)
-                edge = ','.join([id2edge_class[int(id_)] for id_ in ids])
-                line = '%s %s\n' % (edge, vectors)
-                fo.write(line)
 
 
 if __name__ == '__main__':

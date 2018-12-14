@@ -378,9 +378,9 @@ def train_process(pid, node_vocab, Wx, Wy,
                         if k_hop_neighbors is not None:
                             k_hop_neighbors_index = {}
                             for node_osmid in k_hop_neighbors:
-                                k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
+                                k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]] = []
                                 for neighbors_osmid in k_hop_neighbors[node_osmid]:
-                                    k_hop_neighbors_index[node_vocab.node2index[node_osmid]].append(node_vocab.node2index[neighbors_osmid])
+                                    k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]].append(node_vocab.node2index[str(neighbors_osmid)])
 
                             negs = table.cleanly_sample(k_hop_neighbors_index[x], neg)
                         else:

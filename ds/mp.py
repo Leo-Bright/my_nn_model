@@ -66,7 +66,7 @@ class NodeVocab(object):
         return node_vocab
 
     @staticmethod
-    def load_from_file(fname, available_ids=None):
+    def load_from_file(fname):
         '''
             input:
                 training_fname:
@@ -102,7 +102,7 @@ class NodeVocab(object):
             return node_vocab
 
     @staticmethod
-    def load_from_walks(walks, available_ids=None):
+    def load_from_walks(walks):
         '''
             input:
                 walks:
