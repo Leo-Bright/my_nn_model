@@ -52,7 +52,7 @@ class MP2Vec(Common):
     def __init__(self, size=100, window=10, neg=5,
                        alpha=0.005, num_processes=1, iterations=1,
                        normed=True, same_w=False,
-                       is_no_circle_path=False):
+                       is_no_circle_path=True):
         '''
             size:      Dimensionality of word embeddings
             window:    Max window length
@@ -77,18 +77,23 @@ class MP2Vec(Common):
         self.same_w = same_w
         self.is_no_circle_path = is_no_circle_path
 
-    def train(self, G, walks,  seed=None, k_hop_neighbors=None):
+    def train(self, G, training_fname,  seed=None, k_hop_neighbors=None):
         '''
             input:
                 walks:
                     each element: [<node_id>, <node_id>, <node_id>,....]
         '''
 
-        # node_vocab = mp.NodeVocab.load_from_file(walks)
-        node_vocab = mp.NodeVocab.load_from_walks(walks)
+        def get_training_size(fname):
+            with open(fname, 'r') as f:
+                for line in f:
+                    pass
+                return f.tell()
 
-        training_size = len(walks)
+        node_vocab = mp.NodeVocab.load_from_file(training_fname)
+
         print 'distinct node count: %d' % len(node_vocab)
+        training_size = get_training_size(training_fname)
         print 'training walks size: %d' % training_size
 
         #initialize vectors
@@ -114,7 +119,7 @@ class MP2Vec(Common):
                                          self.neg, self.alpha,
                                          self.window, counter,
                                          self.iterations,
-                                         walks, (start, end),
+                                         training_fname, (start, end),
                                          self.same_w,
                                          k_hop_neighbors,
                                          self.is_no_circle_path))
@@ -133,7 +138,7 @@ class MP2Vec(Common):
                           self.neg, self.alpha,
                           self.window, counter,
                           self.iterations,
-                          walks, (0, training_size),
+                          training_fname, (0, training_size),
                           self.same_w,
                           k_hop_neighbors,
                           self.is_no_circle_path)
@@ -292,10 +297,10 @@ class UnigramTable(object):
                                           size=self.size)
         return self.sample(count)
 
+
 #TODO speed up
 #TODO the order of edges of the path
-def get_context(node_index_walk, edge_walk, walk, path_vocab,
-                index, window_size, no_circle=False):
+def get_context(node_index_walk, index, window_size, no_circle=False):
     start = max(index - window_size, 0)
     end = min(index + window_size + 1, len(node_index_walk))
     context = []
@@ -306,15 +311,11 @@ def get_context(node_index_walk, edge_walk, walk, path_vocab,
             y = node_index_walk[i]
             if x == y or y in visited:
                 break
-            # path = path_vocab.path2index[','.join(edge_walk[index:i])]
-            path = path_vocab.path2index[''.join(edge_walk[index:i])]
-            context.append((y, path, edge_walk[i-1]))
+            context.append(y)
             visited.add(y)
     else:
         for i in range(index+1, end):
-            # path = path_vocab.path2index[','.join(edge_walk[index:i])]
-            path = path_vocab.path2index[''.join(edge_walk[index:i])]
-            context.append((node_index_walk[i], path, edge_walk[i-1]))
+            context.append(node_index_walk[i])
     return context
 
 def sigmoid(x):
@@ -327,7 +328,7 @@ def sigmoid(x):
 def train_process(pid, node_vocab, Wx, Wy,
                   tables,
                   neg, starting_alpha, win, counter,
-                  iterations, walks, start_end,
+                  iterations, training_fname, start_end,
                   same_w, k_hop_neighbors,
                   is_no_circle_path):
 
@@ -335,17 +336,6 @@ def train_process(pid, node_vocab, Wx, Wy,
         ex = math.exp(-x)
         s = 1 / (1 + ex)
         return s * (1-s)
-
-    def get_wp2_wp3(wp):
-        wp2 = np.zeros(dim)
-        wp3 = np.zeros(dim)
-        for i, v in enumerate(wp):
-#           v *= 4
-            if v > 0:
-                wp2[i] = 1
-            if -6 <= v <= 6:
-                wp3[i] = dev_sigmoid(v)
-        return wp2, wp3
 
     np.seterr(invalid='raise', over ='raise', under='raise')
 
@@ -358,7 +348,6 @@ def train_process(pid, node_vocab, Wx, Wy,
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)
 
-    win_index = 0
     step = 10000
     dim = len(Wx[0])
     alpha = starting_alpha
@@ -369,86 +358,77 @@ def train_process(pid, node_vocab, Wx, Wy,
 
     for iteration in range(iterations):
         word_count = 0
-        first = True
 
-        for i in range(start, end):
-            #read a random walk
-            walk = walks[i]
-            if len(walk) <= 2:
-                continue
+        with open(training_fname, 'r') as f:
+            f.seek(start)
+            while f.tell() < end:
+                #read a random walk
+                walk = f.readline().strip().split()
+                if len(walk) <= 2:
+                    continue
 
-            # the first element of the walk may be truncated
-            if first:
-                if len(walk) % 2 == 1:
-                    walk = walk[2:]
-                else:
-                    walk = walk[1:]
-                first = False
+                node_index_walk = [node_vocab.node2index[x]
+                                   for i, x in enumerate(walk)]
 
-            node_index_walk = [node_vocab.node2index[x]
-                               for i, x in enumerate(walk)]
-            edge_walk = [x for i, x in enumerate(walk)
-                         if i % 2 == 1]
+                for i, x in enumerate(node_index_walk):
+                    #generate positive training data
+                    for pos_y in get_context(node_index_walk, i, cur_win, no_circle=is_no_circle_path):
 
-            for i, x in enumerate(node_index_walk):
-                #generate positive training data
-                for pos_y, path, last_edge_id in get_context(node_index_walk,
-                                                edge_walk,
-                                                walk,
-                                                i,
-                                                cur_win,
-                                                no_circle=is_no_circle_path):
+                        #generate negative training data
+                        if k_hop_neighbors is not None:
+                            k_hop_neighbors_index = {}
+                            for node_osmid in k_hop_neighbors:
+                                k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
+                                for neighbors_osmid in k_hop_neighbors[node_osmid]:
+                                    k_hop_neighbors_index[node_vocab.node2index[node_osmid]].append(node_vocab.node2index[neighbors_osmid])
 
-                    #generate negative training data
-                    if k_hop_neighbors is not None:
-                        negs = table.cleanly_sample(k_hop_neighbors[x], neg)
-                    else:
-                        negs = table.sample(neg)
-
-                    #SGD learning
-                    for y, path, label in ([(pos_y, path, 1)]
-                                        + [(y, path, 0) for y in negs]):
-
-                        if x == y:
-                            continue
-                        if label == 0 and y == pos_y:
-                            continue
-
-                        wx = Wx[x]
-                        if same_w:
-                            wy = Wx[y]
+                            negs = table.cleanly_sample(k_hop_neighbors_index[x], neg)
                         else:
-                            wy = Wy[y]
+                            negs = table.sample(neg)
 
-                        dot = sum(wx * wy)
-                        p = sigmoid(dot)
-                        g = alpha * (label - p)
-                        if g == 0:
-                            continue
+                        #SGD learning
+                        for y, label in ([(pos_y, 1)] + [(y, 0) for y in negs]):
 
-                        ex = g * wy
-                        wy += g * wx
-                        wx += ex
+                            if x == y:
+                                continue
+                            if label == 0 and y == pos_y:
+                                continue
 
-                word_count += 1
+                            wx = Wx[x]
+                            if same_w:
+                                wy = Wx[y]
+                            else:
+                                wy = Wy[y]
 
-                if word_count % step == 0:
-                    counter.value += step
-                    ratio = float(counter.value)/node_vocab.node_count
-                    ratio = ratio/iterations
+                            dot = sum(wx * wy)
+                            p = sigmoid(dot)
+                            g = alpha * (label - p)
+                            if g == 0:
+                                continue
 
-                    alpha = starting_alpha * (1-ratio)
-                    if alpha < starting_alpha * 0.0001:
-                        alpha = starting_alpha * 0.0001
+                            wx += g * wy
+                            wy += g * wx
 
-                    sys.stdout.write(("\r%f "
-                                      "%d/%d (%.2f%%) "
-                                      "" % (alpha,
-                                           counter.value,
-                                           node_vocab.node_count*iterations,
-                                           ratio*100,
-                                           )))
-                    sys.stdout.flush()
+
+                    word_count += 1
+
+                    if word_count % step == 0:
+                        counter.value += step
+                        ratio = float(counter.value)/node_vocab.node_count
+                        ratio = ratio/iterations
+
+                        alpha = starting_alpha * (1-ratio)
+                        if alpha < starting_alpha * 0.0001:
+                            alpha = starting_alpha * 0.0001
+
+                        sys.stdout.write(("\r%f "
+                                          "%d/%d (%.2f%%) "
+                                          "" % (alpha,
+                                               counter.value,
+                                               node_vocab.node_count*iterations,
+                                               ratio*100,
+                                               )))
+                        sys.stdout.flush()
 
         counter.value += (word_count % step)
         ratio = float(counter.value)/node_vocab.node_count

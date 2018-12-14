@@ -82,11 +82,6 @@ class NodeVocab(object):
             for line in f:
                 tokens = line.strip().split()
                 for i, token in enumerate(tokens):
-                    if i % 2 == 1:
-                        continue
-                    if available_ids is not None and token not in available_ids:
-                        continue
-
                     if token not in node2index:
                         node2index[token] = len(nodes)
                         nodes.append(Node(token))

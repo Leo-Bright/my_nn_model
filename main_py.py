@@ -55,16 +55,16 @@ def main(graph_fname, node_vec_fname, options):
                    num_processes=options.num_processes,
                    alpha=options.alpha,
                    same_w=True,
-                   normed=False,
-                   )
+                   normed=False,)
 
-    neighbors = None
+    neighbors = None   # {node_osmid: [<node_osmid>, <node_osmid>, ...]}
     if options.correct_neg:
         for id_ in G:
             G._get_k_hop_neighborhood(id_, options.window)
+
         neighbors = G.k_hop_neighbors[options.window]
 
-    model.train(G, walks, k_hop_neighbors=neighbors)
+    model.train(G, tmp_walk_fname, k_hop_neighbors=neighbors)
 
     model.dump_to_file(tmp_node_vec_fname, type_='node')
 
@@ -151,7 +151,7 @@ if __name__ == '__main__':
                             '(Default: binary-step function)'))
     parser.add_option('-t', '--correct-negs',
                       action='store_true', dest='correct_neg',
-                      default=False,
+                      default=True,
                       help=('Select correct negative data '
                             '(Default: false)'))
     options, args = parser.parse_args()
