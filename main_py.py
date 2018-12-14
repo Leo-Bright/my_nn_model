@@ -2,18 +2,17 @@
 # -*- encoding: utf8 -*-
 
 import optparse
-import os
 import sys
-import tempfile
-
 from ds import loader
+import graph
+import random
 from model.mp2vec_s import MP2Vec
 
 
 __author__ = 'sheep'
 
 
-def main(graph_fname, node_vec_fname, path_vec_fname, options):
+def main(graph_fname, node_vec_fname, options):
 
     '''\
     %prog [options] <graph_fname> <node_vec_fname> <path_vec_fname>
@@ -22,52 +21,55 @@ def main(graph_fname, node_vec_fname, path_vec_fname, options):
         It can be a file contained edges per line (e.g., res/karate_club_edges.txt)
         or a pickled graph file.
     node_vec_fname: the output file for nodes' vectors
-    path_vec_fname: the output file for meta-paths' vectors
     '''
 
-    print 'Load a HIN...'
-    g = loader.load_a_HIN(graph_fname)
-
+    print 'Load a road Graph...'
+    # g = loader.load_a_HIN(graph_fname)
+    G = graph.load_edgelist(graph_fname, undirected=True)
     print 'Generate random walks...'
-    # _, tmp_walk_fname = tempfile.mkstemp()
+
+    print("Number of nodes: {}".format(len(G.nodes())))
+
+    num_walks = len(G.nodes()) * options.walk_num
+
+    print("Number of walks: {}".format(num_walks))
+
+    data_size = num_walks * options.walk_length
+
+    print("Data size (walks*length): {}".format(data_size))
+
+    print("Walking...")
+    walks = graph.build_deepwalk_corpus(G, num_paths=options.walk_num,
+                                        path_length=options.walk_length, alpha=0, rand=random.Random(0))
+
     tmp_walk_fname = "tmp_walk_fname.txt"
     with open(tmp_walk_fname, 'w') as f:
-        for walk in g.random_walks(options.walk_num, options.walk_length):
+        for walk in walks:
             f.write('%s\n' % ' '.join(map(str, walk)))
 
-    # _, tmp_node_vec_fname = tempfile.mkstemp()
-    # _, tmp_path_vec_fname = tempfile.mkstemp()
     tmp_node_vec_fname = "tmp_node_vec_fname.txt"
-    tmp_path_vec_fname = "tmp_path_vec_fname.txt"
 
     model = MP2Vec(size=options.dim,
                    window=options.window,
                    neg=options.neg,
                    num_processes=options.num_processes,
-#                  iterations=i,
                    alpha=options.alpha,
                    same_w=True,
                    normed=False,
-                   is_no_circle_path=False,
                    )
 
     neighbors = None
     if options.correct_neg:
-        for id_ in g.graph:
-            g._get_k_hop_neighborhood(id_, options.window)
-        neighbors = g.k_hop_neighbors[options.window]
+        for id_ in G:
+            G._get_k_hop_neighborhood(id_, options.window)
+        neighbors = G.k_hop_neighbors[options.window]
 
-    model.train(g,
-                tmp_walk_fname,
-                g.class_nodes,
-                k_hop_neighbors=neighbors,
-                )
+    model.train(G, walks, k_hop_neighbors=neighbors)
+
     model.dump_to_file(tmp_node_vec_fname, type_='node')
-    model.dump_to_file(tmp_path_vec_fname, type_='path')
 
     print 'Dump vectors...'
-    output_node2vec(g, tmp_node_vec_fname, node_vec_fname)
-    output_path2vec(g, tmp_path_vec_fname, path_vec_fname)
+    output_node2vec(G, tmp_node_vec_fname, node_vec_fname)
     return 0
 
 
@@ -141,10 +143,6 @@ if __name__ == '__main__':
                       dest='same_w', default=False,
                       help=('Same matrix for nodes and context nodes '
                             '(Default: False)'))
-    parser.add_option('-c', '--allow-circle', action='store_true',
-                      dest='allow_circle', default=False,
-                      help=('Set to all circles in relationships between '
-                            'nodes (Default: not allow)'))
     parser.add_option('-r', '--sigmoid_regularization',
                       action='store_true', dest='sigmoid_reg',
                       default=False,
@@ -158,9 +156,9 @@ if __name__ == '__main__':
                             '(Default: false)'))
     options, args = parser.parse_args()
 
-    if len(args) != 3:
+    if len(args) != 2:
         parser.print_help()
         sys.exit()
 
-    sys.exit(main(args[0], args[1], args[2], options))
+    sys.exit(main(args[0], args[1], options))
 

@@ -106,6 +106,42 @@ class NodeVocab(object):
             node_vocab._sort()
             return node_vocab
 
+    @staticmethod
+    def load_from_walks(walks, available_ids=None):
+        '''
+            input:
+                walks:
+                    each element: [<node_id>, <node_id>, <node_id>,...]
+                available_ids: set([<node_id>])
+                    node_id should be a string
+        '''
+        nodes = []
+        node2index = {}
+        node_count = 0
+
+        for walk in walks:
+            tokens = walk
+            for i, token in enumerate(tokens):
+
+                if token not in node2index:
+                    node2index[token] = len(nodes)
+                    nodes.append(Node(token))
+
+                nodes[node2index[token]].count += 1
+                node_count += 1
+
+                if node_count % 10000 == 0:
+                    sys.stdout.write("\rReading nodes %d" % node_count)
+                    sys.stdout.flush()
+        print
+
+        node_vocab = NodeVocab()
+        node_vocab.nodes = nodes
+        node_vocab.node2index = node2index
+        node_vocab.node_count = node_count
+        node_vocab._sort()
+        return node_vocab
+
     def __getitem__(self, i):
         return self.nodes[i]
 

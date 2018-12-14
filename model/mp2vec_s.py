@@ -21,11 +21,9 @@ class Common(object):
 
     def __init__(self):
         self.node_vocab = None
-        self.path_vocab = None
         self.node2vec = None
-        self.path2vec = None
 
-    def train(self, training_fname, seed=None):
+    def train(self, walks, seed=None):
         raise NotImplementedError
 
     def dump_to_file(self, output_fname, type_='node'):
@@ -75,64 +73,30 @@ class MP2Vec(Common):
         self.iterations = iterations
         self.vocab = None
         self.node2vec = None
-        self.path2vec = None
         self.normed = normed
         self.same_w = same_w
         self.is_no_circle_path = is_no_circle_path
 
-    def train(self, g, training_fname, class2node_ids,
-                                       seed=None,
-                                       edge_class_inverse_mapping=None,
-                                       k_hop_neighbors=None,
-                                       id2vec_fname=None,
-                                       path2vec_fname=None):
+    def train(self, G, walks,  seed=None, k_hop_neighbors=None):
         '''
             input:
-                training_fname:
-                    each line: <node_id> <edge_id> <node_id> <edge_id> <node_id>....
+                walks:
+                    each element: [<node_id>, <node_id>, <node_id>,....]
         '''
-        def get_training_size(fname):
-            with open(fname, 'r') as f:
-                for line in f:
-                    pass
-                return f.tell()
 
-        if seed is not None:
-            np.random.seed(seed)
+        # node_vocab = mp.NodeVocab.load_from_file(walks)
+        node_vocab = mp.NodeVocab.load_from_walks(walks)
 
-        node_vocab = mp.NodeVocab.load_from_file(training_fname)
-        path_vocab = mp.PathVocab.load_from_file(training_fname,
-                                self.window,
-                                inverse_mapping=edge_class_inverse_mapping)
-        for ith, p in enumerate(path_vocab.paths):
-            if p.is_inverse:
-                continue
-            print ith, p
-
-        training_size = get_training_size(training_fname)
-        print 'training bytes: %d' % training_size
+        training_size = len(walks)
         print 'distinct node count: %d' % len(node_vocab)
-        print 'distinct path count: %d' % path_vocab.distinct_path_count()
-
-        #load pre-trained node and path vectors
-        id2vec = None
-        if id2vec_fname is not None:
-            id2vec = MP2Vec.load_id2vec(id2vec_fname)
-        path2vec = None
-        if path2vec_fname is not None:
-            path2vec = MP2Vec.load_path2vec(path2vec_fname,
-                                            path_vocab.path2index)
+        print 'training walks size: %d' % training_size
 
         #initialize vectors
-        Wx, Wy, Wpath = MP2Vec.init_net(self.size,
-                                        len(node_vocab),
-                                        path_vocab.distinct_path_count(),
-                                        id2vec=id2vec,
-                                        path2vec=path2vec)
+        Wx, Wy = MP2Vec.init_net(self.size, len(node_vocab))
 
         counter = Value('i', 0)
         tables = {
-            'all': UnigramTable(g, node_vocab, uniform=True)
+            'all': UnigramTable(node_vocab, uniform=True)
         }
 
         print 'start training'
@@ -145,12 +109,12 @@ class MP2Vec(Common):
                     end = training_size
 
                 p = Process(target=train_process,
-                                   args=(i, node_vocab, path_vocab,
-                                         Wx, Wy, Wpath, tables,
+                                   args=(i, node_vocab,
+                                         Wx, Wy, tables,
                                          self.neg, self.alpha,
                                          self.window, counter,
                                          self.iterations,
-                                         training_fname, (start, end),
+                                         walks, (start, end),
                                          self.same_w,
                                          k_hop_neighbors,
                                          self.is_no_circle_path))
@@ -164,19 +128,18 @@ class MP2Vec(Common):
             end = time.time()
         else:
             start = time.time()
-            train_process(0, node_vocab, path_vocab,
-                          Wx, Wy, Wpath, tables,
+            train_process(0, node_vocab,
+                          Wx, Wy, tables,
                           self.neg, self.alpha,
                           self.window, counter,
                           self.iterations,
-                          training_fname, (0, training_size),
+                          walks, (0, training_size),
                           self.same_w,
                           k_hop_neighbors,
                           self.is_no_circle_path)
             end = time.time()
 
         self.node_vocab = node_vocab
-        self.path_vocab = path_vocab
 
         #normalize node and path vectors
         node2vec = []
@@ -193,20 +156,6 @@ class MP2Vec(Common):
                 node2vec.append(np.array(list(vec)))
         self.node2vec = node2vec
 
-        path2vec = []
-        if self.normed:
-            for vec in Wpath:
-                vec = np.array(list(vec))
-                norm=np.linalg.norm(vec)
-                if norm==0:
-                    path2vec.append(vec)
-                else:
-                    path2vec.append(vec/norm)
-        else:
-            for vec in Wpath:
-                path2vec.append(np.array(list(vec)))
-        self.path2vec = path2vec
-
         print
         print 'Finished. Total time: %.2f minutes' %  ((end-start)/60)
 
@@ -221,20 +170,6 @@ class MP2Vec(Common):
                     continue
                 tokens = line.strip().split(' ')
                 id_ = int(tokens[0])
-                id2vec[id_] = map(float, tokens[1:])
-        return id2vec
-
-    @staticmethod
-    def load_path2vec(fname, path2index):
-        id2vec = {}
-        with open(fname, 'r') as f:
-            first = True
-            for line in f:
-                if first:
-                    first = False
-                    continue
-                tokens = line.strip().split(' ')
-                id_ = int(path2index[tokens[0]])
                 id2vec[id_] = map(float, tokens[1:])
         return id2vec
 
@@ -264,23 +199,7 @@ class MP2Vec(Common):
         Wy = np.ctypeslib.as_ctypes(tmp)
         Wy = Array(Wy._type_, Wy, lock=False)
 
-        if id2vec is not None:
-            for i, vec in sorted(id2vec.items()):
-                for j in range(len(vec)):
-                    Wy[i][j] = vec[j]
-
-        tmp = np.random.uniform(low=0.0,
-                                high=1.0/dim,
-                                size=(node_size, dim)).astype(np.float64)
-        Wpath = np.ctypeslib.as_ctypes(tmp)
-        Wpath = Array(Wpath._type_, Wpath, lock=False)
-
-        if path2vec is not None:
-            for i, vec in sorted(path2vec.items()):
-                for j in range(len(vec)):
-                    Wpath[i][j] = vec[j]
-
-        return Wx, Wy, Wpath
+        return Wx, Wy
 
 
 class UnigramTable(object):
@@ -289,8 +208,8 @@ class UnigramTable(object):
         A list of indices of words in the vocab
         following a power law distribution.
     '''
-    def __init__(self, g, vocab, seed=None, size=1000000, times=1, node_ids=None, uniform=False):
-        self.table = UnigramTable.generate_table(g, vocab,
+    def __init__(self, vocab, seed=None, size=1000000, times=1, node_ids=None, uniform=False):
+        self.table = UnigramTable.generate_table(vocab,
                                                  vocab.count() * times,
                                                  node_ids,
                                                  uniform)
@@ -303,7 +222,7 @@ class UnigramTable(object):
         self.index = 0
 
     @staticmethod
-    def generate_table(g, vocab, table_size, node_ids, uniform):
+    def generate_table(vocab, table_size, node_ids, uniform):
         power = 0.75
         if node_ids is not None:
             if uniform:
@@ -406,10 +325,10 @@ def sigmoid(x):
         return 0.0
     return 1 / (1 + math.exp(-x))
 
-def train_process(pid, node_vocab, path_vocab, Wx, Wy, Wpath,
+def train_process(pid, node_vocab, Wx, Wy,
                   tables,
                   neg, starting_alpha, win, counter,
-                  iterations, training_fname, start_end,
+                  iterations, walks, start_end,
                   same_w, k_hop_neighbors,
                   is_no_circle_path):
 
@@ -436,17 +355,9 @@ def train_process(pid, node_vocab, path_vocab, Wx, Wy, Wpath,
         warnings.simplefilter('ignore', RuntimeWarning)
         Wx = np.ctypeslib.as_array(Wx)
         Wy = np.ctypeslib.as_array(Wy)
-        Wpath = np.ctypeslib.as_array(Wpath)
 
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)
-
-    max_path_id = 0
-    for ith, path in enumerate(path_vocab.paths):
-        if path.is_inverse is False:
-            max_path_id = ith
-        else:
-            break
 
     win_index = 0
     step = 10000
@@ -460,92 +371,85 @@ def train_process(pid, node_vocab, path_vocab, Wx, Wy, Wpath,
     for iteration in range(iterations):
         word_count = 0
         first = True
-        with open(training_fname, 'r') as f:
-            f.seek(start)
-            while f.tell() < end:
-                #read a random walk
-                walk = f.readline().strip().split()
-                if len(walk) <= 2:
-                    continue
-                # the first element of the walk may be truncated
-                if first:
-                    if len(walk) % 2 == 1:
-                        walk = walk[2:]
+
+        for i in range(start, end):
+            #read a random walk
+            walk = walks[i]
+            if len(walk) <= 2:
+                continue
+
+            # the first element of the walk may be truncated
+            if first:
+                if len(walk) % 2 == 1:
+                    walk = walk[2:]
+                else:
+                    walk = walk[1:]
+                first = False
+
+            node_index_walk = [node_vocab.node2index[x]
+                               for i, x in enumerate(walk)]
+            edge_walk = [x for i, x in enumerate(walk)
+                         if i % 2 == 1]
+
+            for i, x in enumerate(node_index_walk):
+                #generate positive training data
+                for pos_y, path, last_edge_id in get_context(node_index_walk,
+                                                edge_walk,
+                                                walk,
+                                                i,
+                                                cur_win,
+                                                no_circle=is_no_circle_path):
+
+                    #generate negative training data
+                    if k_hop_neighbors is not None:
+                        negs = table.cleanly_sample(k_hop_neighbors[x], neg)
                     else:
-                        walk = walk[1:]
-                    first = False
+                        negs = table.sample(neg)
 
-                node_index_walk = [node_vocab.node2index[x]
-                                   for i, x in enumerate(walk)
-                                   if i % 2 == 0]
-                edge_walk = [x for i, x in enumerate(walk)
-                             if i % 2 == 1]
+                    #SGD learning
+                    for y, path, label in ([(pos_y, path, 1)]
+                                        + [(y, path, 0) for y in negs]):
 
-                for i, x in enumerate(node_index_walk):
-                    #generate positive training data
-                    for pos_y, path, last_edge_id in get_context(node_index_walk,
-                                                    edge_walk,
-                                                    walk,
-                                                    path_vocab,
-                                                    i,
-                                                    cur_win,
-                                                    no_circle=is_no_circle_path):
+                        if x == y:
+                            continue
+                        if label == 0 and y == pos_y:
+                            continue
 
-                        #generate negative training data
-                        if k_hop_neighbors is not None:
-                            negs = table.cleanly_sample(k_hop_neighbors[x], neg)
+                        wx = Wx[x]
+                        if same_w:
+                            wy = Wx[y]
                         else:
-                            negs = table.sample(neg)
+                            wy = Wy[y]
 
-                        #SGD learning
-                        for y, path, label in ([(pos_y, path, 1)]
-                                            + [(y, path, 0) for y in negs]):
+                        dot = sum(wx * wy)
+                        p = sigmoid(dot)
+                        g = alpha * (label - p)
+                        if g == 0:
+                            continue
 
-                            if x == y:
-                                continue
-                            if label == 0 and y == pos_y:
-                                continue
+                        ex = g * wy
+                        wy += g * wx
+                        wx += ex
 
-                            wx = Wx[x]
-                            if same_w:
-                                wy = Wx[y]
-                            else:
-                                wy = Wy[y]
-                            wp = Wpath[path]
-                            wp2, wp3 = get_wp2_wp3(wp)
+                word_count += 1
 
-                            dot = sum(wp2 * wx * wy)
-                            p = sigmoid(dot)
-                            g = alpha * (label - p)
-                            if g == 0:
-                                continue
+                if word_count % step == 0:
+                    counter.value += step
+                    ratio = float(counter.value)/node_vocab.node_count
+                    ratio = ratio/iterations
 
-                            epath = g * wp3 * wx * wy
-                            wp2 = g * wp2
-                            ex = wp2 * wy
-                            wy += wp2 * wx
-                            wx += ex
-                            wp += epath
+                    alpha = starting_alpha * (1-ratio)
+                    if alpha < starting_alpha * 0.0001:
+                        alpha = starting_alpha * 0.0001
 
-                    word_count += 1
-
-                    if word_count % step == 0:
-                        counter.value += step
-                        ratio = float(counter.value)/node_vocab.node_count
-                        ratio = ratio/iterations
-
-                        alpha = starting_alpha * (1-ratio)
-                        if alpha < starting_alpha * 0.0001:
-                            alpha = starting_alpha * 0.0001
-
-                        sys.stdout.write(("\r%f "
-                                          "%d/%d (%.2f%%) "
-                                          "" % (alpha,
-                                               counter.value,
-                                               node_vocab.node_count*iterations,
-                                               ratio*100,
-                                               )))
-                        sys.stdout.flush()
+                    sys.stdout.write(("\r%f "
+                                      "%d/%d (%.2f%%) "
+                                      "" % (alpha,
+                                           counter.value,
+                                           node_vocab.node_count*iterations,
+                                           ratio*100,
+                                           )))
+                    sys.stdout.flush()
 
         counter.value += (word_count % step)
         ratio = float(counter.value)/node_vocab.node_count
