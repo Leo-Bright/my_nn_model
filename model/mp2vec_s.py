@@ -174,8 +174,7 @@ class MP2Vec(Common):
         return id2vec
 
     @staticmethod
-    def init_net(dim, node_size, path_size,
-                 id2vec=None, path2vec=None):
+    def init_net(dim, node_size, id2vec=None):
         '''
             return
                 Wx: a |V|*d matrix for input layer to hidden layer
