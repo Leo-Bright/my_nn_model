@@ -190,8 +190,9 @@ class MP2Vec(Common):
         tmp = np.random.uniform(low=-0.5/dim,
                                 high=0.5/dim,
                                 size=(node_size, dim)).astype(np.float64)
-        Wx = np.ctypeslib.as_ctypes(tmp)
-        Wx = Array(Wx._type_, Wx, lock=False)
+        # Wx = np.ctypeslib.as_ctypes(tmp)
+        # Wx = Array(Wx._type_, Wx, lock=False)
+        Wx = np.array(tmp)
 
         if id2vec is not None:
             for i, vec in sorted(id2vec.items()):
@@ -201,9 +202,11 @@ class MP2Vec(Common):
         tmp = np.random.uniform(low=-0.5/dim,
                                 high=0.5/dim,
                                 size=(node_size, dim)).astype(np.float64)
-        Wy = np.ctypeslib.as_ctypes(tmp)
-        Wy = Array(Wy._type_, Wy, lock=False)
-
+        # Wy = np.ctypeslib.as_ctypes(tmp)
+        # Wy = Array(Wy._type_, Wy, lock=False)
+        Wy = np.array(tmp)
+        print Wx
+        print Wy
         return Wx, Wy
 
 
@@ -340,10 +343,10 @@ def train_process(pid, node_vocab, Wx, Wy,
     np.seterr(invalid='raise', over ='raise', under='raise')
 
     #ignore the PEP 3118 buffer warning
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', RuntimeWarning)
-        Wx = np.ctypeslib.as_array(Wx)
-        Wy = np.ctypeslib.as_array(Wy)
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter('ignore', RuntimeWarning)
+    #     Wx = np.ctypeslib.as_array(Wx)
+    #     Wy = np.ctypeslib.as_array(Wy)
 
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)

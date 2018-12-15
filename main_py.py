@@ -7,6 +7,7 @@ from ds import loader
 import graph
 import random
 from model.mp2vec_s import MP2Vec
+import json
 
 
 __author__ = 'sheep'
@@ -43,9 +44,14 @@ def main(graph_fname, node_vec_fname, options):
                                         path_length=options.walk_length, alpha=0, rand=random.Random(0))
 
     tmp_walk_fname = "tmp_walk_fname.txt"
+    tmp_walk_json = "tmp_walk_fname.json"
     with open(tmp_walk_fname, 'w') as f:
         for walk in walks:
             f.write('%s\n' % ' '.join(map(str, walk)))
+
+    with open(tmp_walk_json, 'w') as f:
+        f.write(json.dumps(walks))
+
 
     model = MP2Vec(size=options.dim,
                    window=options.window,
