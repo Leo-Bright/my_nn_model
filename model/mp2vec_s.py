@@ -77,23 +77,24 @@ class MP2Vec(Common):
         self.same_w = same_w
         self.is_no_circle_path = is_no_circle_path
 
-    def train(self, G, training_fname,  seed=None, k_hop_neighbors=None):
+    def train(self, G, walks,  seed=None, k_hop_neighbors=None):
         '''
             input:
                 walks:
                     each element: [<node_id>, <node_id>, <node_id>,....]
         '''
 
-        def get_training_size(fname):
+        def get_training_file_size(fname):
             with open(fname, 'r') as f:
                 for line in f:
                     pass
                 return f.tell()
 
-        node_vocab = mp.NodeVocab.load_from_file(training_fname)
+        node_vocab = mp.NodeVocab.load_from_walks(walks)
 
         print 'distinct node count: %d' % len(node_vocab)
-        training_size = get_training_size(training_fname)
+        # training_size = get_training_file_size(training_fname)
+        training_size = len(walks)
         print 'training walks size: %d' % training_size
 
         #initialize vectors
@@ -119,7 +120,7 @@ class MP2Vec(Common):
                                          self.neg, self.alpha,
                                          self.window, counter,
                                          self.iterations,
-                                         training_fname, (start, end),
+                                         walks, (start, end),
                                          self.same_w,
                                          k_hop_neighbors,
                                          self.is_no_circle_path))
@@ -138,7 +139,7 @@ class MP2Vec(Common):
                           self.neg, self.alpha,
                           self.window, counter,
                           self.iterations,
-                          training_fname, (0, training_size),
+                          walks, (0, training_size),
                           self.same_w,
                           k_hop_neighbors,
                           self.is_no_circle_path)
@@ -326,9 +327,8 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 def train_process(pid, node_vocab, Wx, Wy,
-                  tables,
-                  neg, starting_alpha, win, counter,
-                  iterations, training_fname, start_end,
+                  tables, neg, starting_alpha, win, counter,
+                  iterations, walks, start_end,
                   same_w, k_hop_neighbors,
                   is_no_circle_path):
 
@@ -348,7 +348,7 @@ def train_process(pid, node_vocab, Wx, Wy,
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)
 
-    step = 10000
+    step = 100
     dim = len(Wx[0])
     alpha = starting_alpha
     start, end = start_end
@@ -359,11 +359,13 @@ def train_process(pid, node_vocab, Wx, Wy,
     for iteration in range(iterations):
         word_count = 0
 
-        with open(training_fname, 'r') as f:
-            f.seek(start)
-            while f.tell() < end:
+        # with open(training_fname, 'r') as f:
+        #     f.seek(start)
+        #     while f.tell() < end:
                 #read a random walk
-                walk = f.readline().strip().split()
+        for i in range(start, end):
+                # walk = f.readline().strip().split()
+                walk = walks[i]
                 if len(walk) <= 2:
                     continue
 

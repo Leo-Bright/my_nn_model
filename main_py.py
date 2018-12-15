@@ -47,8 +47,6 @@ def main(graph_fname, node_vec_fname, options):
         for walk in walks:
             f.write('%s\n' % ' '.join(map(str, walk)))
 
-    tmp_node_vec_fname = "tmp_node_vec_fname.txt"
-
     model = MP2Vec(size=options.dim,
                    window=options.window,
                    neg=options.neg,
@@ -64,7 +62,7 @@ def main(graph_fname, node_vec_fname, options):
 
         neighbors = G.k_hop_neighbors[options.window]
 
-    model.train(G, tmp_walk_fname, k_hop_neighbors=neighbors)
+    model.train(G, walks, k_hop_neighbors=neighbors)
 
     print 'Dump vectors...'
     model.dump_to_file(node_vec_fname, type_='node')
