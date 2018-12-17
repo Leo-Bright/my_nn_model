@@ -40,17 +40,23 @@ def main(graph_fname, node_vec_fname, options):
     print("Data size (walks*length): {}".format(data_size))
 
     print("Walking...")
-    walks = graph.build_deepwalk_corpus(G, num_paths=options.walk_num,
-                                        path_length=options.walk_length, alpha=0, rand=random.Random(0))
+    # walks = graph.build_deepwalk_corpus(G, num_paths=options.walk_num,
+    #                                     path_length=options.walk_length, alpha=0, rand=random.Random(0))
 
     tmp_walk_fname = "tmp_walk_fname.txt"
     tmp_walk_json = "tmp_walk_fname.json"
-    with open(tmp_walk_fname, 'w') as f:
-        for walk in walks:
-            f.write('%s\n' % ' '.join(map(str, walk)))
 
-    with open(tmp_walk_json, 'w') as f:
-        f.write(json.dumps(walks))
+    tmp_walk = open(tmp_walk_json, 'r')
+    walks = json.loads(tmp_walk.readline())
+    tmp_walk.close()
+    walks = walks[:200]
+
+    # with open(tmp_walk_fname, 'w') as f:
+    #     for walk in walks:
+    #         f.write('%s\n' % ' '.join(map(str, walk)))
+
+    # with open(tmp_walk_json, 'w') as f:
+    #     f.write(json.dumps(walks))
 
 
     model = MP2Vec(size=options.dim,

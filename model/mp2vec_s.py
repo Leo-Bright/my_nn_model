@@ -190,9 +190,9 @@ class MP2Vec(Common):
         tmp = np.random.uniform(low=-0.5/dim,
                                 high=0.5/dim,
                                 size=(node_size, dim)).astype(np.float64)
-        # Wx = np.ctypeslib.as_ctypes(tmp)
-        # Wx = Array(Wx._type_, Wx, lock=False)
-        Wx = np.array(tmp)
+        Wx = np.ctypeslib.as_ctypes(tmp)
+        Wx = Array(Wx._type_, Wx, lock=False)
+        # Wx = np.array(tmp)
 
         if id2vec is not None:
             for i, vec in sorted(id2vec.items()):
@@ -202,9 +202,9 @@ class MP2Vec(Common):
         tmp = np.random.uniform(low=-0.5/dim,
                                 high=0.5/dim,
                                 size=(node_size, dim)).astype(np.float64)
-        # Wy = np.ctypeslib.as_ctypes(tmp)
-        # Wy = Array(Wy._type_, Wy, lock=False)
-        Wy = np.array(tmp)
+        Wy = np.ctypeslib.as_ctypes(tmp)
+        Wy = Array(Wy._type_, Wy, lock=False)
+        # Wy = np.array(tmp)
         print Wx
         print Wy
         return Wx, Wy
@@ -351,7 +351,7 @@ def train_process(pid, node_vocab, Wx, Wy,
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)
 
-    step = 100
+    step = 5
     dim = len(Wx[0])
     alpha = starting_alpha
     start, end = start_end
@@ -383,9 +383,9 @@ def train_process(pid, node_vocab, Wx, Wy,
                         if k_hop_neighbors is not None:
                             k_hop_neighbors_index = {}
                             for node_osmid in k_hop_neighbors:
-                                k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]] = []
+                                k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
                                 for neighbors_osmid in k_hop_neighbors[node_osmid]:
-                                    k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]].append(node_vocab.node2index[str(neighbors_osmid)])
+                                    k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]].append(node_vocab.node2index[neighbors_osmid])
 
                             negs = table.cleanly_sample(k_hop_neighbors_index[x], neg)
                         else:
