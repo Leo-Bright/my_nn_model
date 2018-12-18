@@ -90,6 +90,7 @@ class MP2Vec(Common):
                     pass
                 return f.tell()
 
+        print("load node_vocab...")
         node_vocab = mp.NodeVocab.load_from_walks(walks)
 
         print 'distinct node count: %d' % len(node_vocab)
@@ -205,8 +206,6 @@ class MP2Vec(Common):
         Wy = np.ctypeslib.as_ctypes(tmp)
         Wy = Array(Wy._type_, Wy, lock=False)
         # Wy = np.array(tmp)
-        print Wx
-        print Wy
         return Wx, Wy
 
 
@@ -383,9 +382,11 @@ def train_process(pid, node_vocab, Wx, Wy,
                         if k_hop_neighbors is not None:
                             k_hop_neighbors_index = {}
                             for node_osmid in k_hop_neighbors:
-                                k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
+                                if node_osmid in node_vocab.node2index and node_vocab.node2index[node_osmid] not in k_hop_neighbors_index:
+                                    k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
                                 for neighbors_osmid in k_hop_neighbors[node_osmid]:
-                                    k_hop_neighbors_index[node_vocab.node2index[str(node_osmid)]].append(node_vocab.node2index[neighbors_osmid])
+                                    if neighbors_osmid in node_vocab.node2index:
+                                        k_hop_neighbors_index[node_vocab.node2index[node_osmid]].append(node_vocab.node2index[neighbors_osmid])
 
                             negs = table.cleanly_sample(k_hop_neighbors_index[x], neg)
                         else:

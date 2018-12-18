@@ -69,8 +69,10 @@ def main(graph_fname, node_vec_fname, options):
 
     neighbors = None   # {node_osmid: [<node_osmid>, <node_osmid>, ...]}
     if options.correct_neg:
-        for id_ in G:
-            G._get_k_hop_neighborhood(id_, options.window)
+        # for id_ in G:
+        for walk in walks:
+            for id_ in walk:
+                G._get_k_hop_neighborhood(int(id_), options.window)
 
         neighbors = G.k_hop_neighbors[options.window]
 
