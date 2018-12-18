@@ -40,24 +40,20 @@ def main(graph_fname, node_vec_fname, options):
     print("Data size (walks*length): {}".format(data_size))
 
     print("Walking...")
-    # walks = graph.build_deepwalk_corpus(G, num_paths=options.walk_num,
-    #                                     path_length=options.walk_length, alpha=0, rand=random.Random(0))
+    walks = graph.build_deepwalk_corpus(G, num_paths=options.walk_num,
+                                        path_length=options.walk_length, alpha=0, rand=random.Random(0))
 
     tmp_walk_fname = "tmp_walk_fname.txt"
     tmp_walk_json = "tmp_walk_fname.json"
 
-    tmp_walk = open(tmp_walk_json, 'r')
-    walks = json.loads(tmp_walk.readline())
-    tmp_walk.close()
-    walks = walks[:200]
+    with open(tmp_walk_json, 'w+') as tmp_walks:
+        tmp_walks.write(json.dumps(walks))
 
-    # with open(tmp_walk_fname, 'w') as f:
-    #     for walk in walks:
-    #         f.write('%s\n' % ' '.join(map(str, walk)))
+    with open(tmp_walk_fname, 'w') as f:
+        for walk in walks:
+            f.write('%s\n' % ' '.join(map(str, walk)))
 
-    # with open(tmp_walk_json, 'w') as f:
-    #     f.write(json.dumps(walks))
-
+    print("Walking done...")
 
     model = MP2Vec(size=options.dim,
                    window=options.window,
@@ -69,10 +65,8 @@ def main(graph_fname, node_vec_fname, options):
 
     neighbors = None   # {node_osmid: [<node_osmid>, <node_osmid>, ...]}
     if options.correct_neg:
-        # for id_ in G:
-        for walk in walks:
-            for id_ in walk:
-                G._get_k_hop_neighborhood(int(id_), options.window)
+        for id_ in G:
+            G._get_k_hop_neighborhood(id_, options.window)
 
         neighbors = G.k_hop_neighbors[options.window]
 

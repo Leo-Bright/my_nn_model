@@ -92,7 +92,7 @@ class MP2Vec(Common):
 
         print("load node_vocab...")
         node_vocab = mp.NodeVocab.load_from_walks(walks)
-
+        walks = walks[:200]
         print 'distinct node count: %d' % len(node_vocab)
         # training_size = get_training_file_size(training_fname)
         training_size = len(walks)
@@ -342,10 +342,10 @@ def train_process(pid, node_vocab, Wx, Wy,
     np.seterr(invalid='raise', over ='raise', under='raise')
 
     #ignore the PEP 3118 buffer warning
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter('ignore', RuntimeWarning)
-    #     Wx = np.ctypeslib.as_array(Wx)
-    #     Wy = np.ctypeslib.as_array(Wy)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        Wx = np.ctypeslib.as_array(Wx)
+        Wy = np.ctypeslib.as_array(Wy)
 
     error_fname = 'error.%d' % pid
     os.system('rm -f %s' % error_fname)
@@ -382,12 +382,10 @@ def train_process(pid, node_vocab, Wx, Wy,
                         if k_hop_neighbors is not None:
                             k_hop_neighbors_index = {}
                             for node_osmid in k_hop_neighbors:
-                                if node_osmid in node_vocab.node2index and node_vocab.node2index[node_osmid] not in k_hop_neighbors_index:
-                                    k_hop_neighbors_index[node_vocab.node2index[node_osmid]] = []
-                                for neighbors_osmid in k_hop_neighbors[node_osmid]:
-                                    if neighbors_osmid in node_vocab.node2index:
-                                        k_hop_neighbors_index[node_vocab.node2index[node_osmid]].append(node_vocab.node2index[neighbors_osmid])
-
+                                node_index = node_vocab.node2index[str(node_osmid)]
+                                k_hop_neighbors_index[node_index] = []
+                                for neighbor_osmid in k_hop_neighbors[node_osmid]:
+                                    k_hop_neighbors_index[node_index].append(node_vocab.node2index[str(neighbor_osmid)])
                             negs = table.cleanly_sample(k_hop_neighbors_index[x], neg)
                         else:
                             negs = table.sample(neg)
@@ -406,7 +404,8 @@ def train_process(pid, node_vocab, Wx, Wy,
                             else:
                                 wy = Wy[y]
 
-                            dot = sum(wx * wy)
+                            wp2 = np.ones(dim)
+                            dot = sum(wp2 * wx * wy)
                             p = sigmoid(dot)
                             g = alpha * (label - p)
                             if g == 0:
